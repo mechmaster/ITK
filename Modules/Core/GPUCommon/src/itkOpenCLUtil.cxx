@@ -185,6 +185,50 @@ void OpenCLPrintDeviceInfo(cl_device_id device, bool verbose)
   }
 }
 
+std::vector<cl_platform_id> OpenCLGetPlatformsList()
+{
+  cl_uint num_platforms;
+  cl_int ciErrNum;
+  std::vector<cl_platform_id> platformsList;
+
+  ciErrNum = clGetPlatformIDs(0, ITK_NULLPTR, &num_platforms);
+  if (ciErrNum != CL_SUCCESS)
+    {
+    printf("clGetPlatformIDs: get number of platforms error. Error code = %i \n\n", ciErrNum);
+    return std::vector<cl_platform_id>();
+    }
+  
+  if(num_platforms == 0)
+    {
+    printf("No OpenCL platform found!\n\n");
+    return std::vector<cl_platform_id>();
+    }
+  
+  platformsList.resize(num_platforms);
+  ciErrNum = clGetPlatformIDs(num_platforms, &platformsList[0], ITK_NULLPTR);
+  if (ciErrNum != CL_SUCCESS)
+    {
+    printf("clGetPlatformIDs: get platforms list error. Error code = %i \n\n", ciErrNum);
+    return std::vector<cl_platform_id>();
+    }
+  
+  std::vector<cl_platform_id>::iterator iter = platformsList.begin();
+  for (; iter != platformsList.end(); ++iter)
+    {
+    std::string platformName;
+    unsigned int platformNameSize = 1024;
+    platformName.resize(platformNameSize);
+    ciErrNum = clGetPlatformInfo(*iter, CL_PLATFORM_NAME, platformName.size(), &platformName[0], &platformNameSize);
+    platformName.resize(platformNameSize);
+
+    // debug
+    std::cout << "Platform " << " : " << platformName << std::endl;
+    //
+    }
+  
+  return platformsList;
+}
+
 //
 // Find the OpenCL platform that matches the "name"
 //
@@ -344,23 +388,81 @@ void OpenCLCheckError(cl_int error, const char* filename, int lineno, const char
     }
 }
 
+bool OpenCLGetAvailableDevices(cl_platform_id platform, cl_device_type devType, std::vector<cl_device_id>& devicesList)
+{
+  devicesList.clear();
+
+  cl_uint totalNumDevices;
+  
+  // get total # of devices
+  cl_int errid;
+  
+  errid = clGetDeviceIDs(platform, devType, 0, ITK_NULLPTR, &totalNumDevices);
+  if (errid != CL_SUCCESS)
+    {
+    std::string platformName;
+    platformName.resize(1024);
+    clGetPlatformInfo(platform, CL_PLATFORM_NAME, platformName.size(), &platformName[0], ITK_NULLPTR);
+
+    printf("clGetDeviceIDs: get number of deviceIDs error. Platform name = %s; Device type = CL_DEVICE_TYPE_GPU; Error code = %i \n\n",
+      &platformName[0], errid);
+    return false;
+    }
+  
+  devicesList.resize(totalNumDevices);
+  
+  errid = clGetDeviceIDs(platform, devType, totalNumDevices, &devicesList[0], ITK_NULLPTR);
+  if (errid != CL_SUCCESS)
+    {
+    std::string platformName;
+    platformName.resize(1024);
+    clGetPlatformInfo(platform, CL_PLATFORM_NAME, platformName.size(), &platformName[0], ITK_NULLPTR);
+
+    printf("clGetDeviceIDs: get deviceIDs list error. Platform name = %s; Device type = CL_DEVICE_TYPE_GPU; Error code = %i \n\n",
+      &platformName[0], errid);
+    devicesList.clear();
+    return false;
+    }
+  
+  std::vector<cl_device_id>::iterator iter = devicesList.begin();
+  for (; iter != devicesList.end(); ++iter)
+    {
+    cl_bool isAvailable;
+    clGetDeviceInfo(*iter, CL_DEVICE_AVAILABLE, sizeof(cl_bool), &isAvailable, ITK_NULLPTR);
+    if (!isAvailable)
+      {
+      iter = devicesList.erase(iter);
+      if (iter == devicesList.end())
+        {
+        break;
+        }
+      }
+    }
+  
+  return devicesList.size() != 0;
+}
+
 /** Check if OpenCL-enabled GPU is present. */
 bool IsGPUAvailable()
 {
-  cl_platform_id platformId = OpenCLSelectPlatform("NVIDIA");
-
-  if(platformId == ITK_NULLPTR) return false;
-
+  std::vector<cl_platform_id> platformsList = OpenCLGetPlatformsList();
+  if (platformsList.size() == 0)
+    {
+    return false;
+    }
+  
   cl_device_type devType = CL_DEVICE_TYPE_GPU;
-
-  // Get the devices
-  cl_uint numDevices;
-  cl_device_id* device_id = OpenCLGetAvailableDevices(platformId, devType, &numDevices);
-  free( device_id );
-
-  if(numDevices < 1) return false;
-
-  return true;
+  
+  std::vector<cl_platform_id>::iterator iter = platformsList.begin();
+  for (; iter != platformsList.end(); ++iter)
+    {
+    std::vector<cl_device_id> devicesList;
+    bool res = OpenCLGetAvailableDevices(*iter, devType, devicesList);
+    if (res && devicesList.size())
+      {
+      return true;
+      }
+    }
 }
 
 std::string GetTypename(const std::type_info& intype)
