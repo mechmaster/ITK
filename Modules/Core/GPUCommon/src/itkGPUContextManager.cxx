@@ -43,44 +43,52 @@ GPUContextManager::GPUContextManager()
 {
   cl_int errid;
 
-  // Get the platforms
-  errid = clGetPlatformIDs(0, ITK_NULLPTR, &m_NumberOfPlatforms);
-  OpenCLCheckError( errid, __FILE__, __LINE__, ITK_LOCATION );
-
-  // Get NVIDIA platform by default
-  m_Platform = OpenCLSelectPlatform("NVIDIA");
-  assert(m_Platform != ITK_NULLPTR);
-
-  cl_device_type devType = CL_DEVICE_TYPE_GPU;//CL_DEVICE_TYPE_CPU;//
-
-  // Get the devices
-  m_Devices = OpenCLGetAvailableDevices(m_Platform, devType, &m_NumberOfDevices);
-
+  m_DevicesList.clear();
+  
+  std::vector<cl_platform_id> platformsList = OpenCLGetPlatformsList();
+  if (platformsList.size() != 0)
+    {
+    cl_device_type devType = CL_DEVICE_TYPE_GPU;
+    
+    std::vector<cl_platform_id>::iterator iter = platformsList.begin();
+    for (; iter != platformsList.end(); ++iter)
+      {
+      std::vector<cl_device_id> devicesList;
+      bool res = OpenCLGetAvailableDevices(*iter, devType, devicesList);
+      if (res && devicesList.size())
+        {
+          m_DevicesList.insert(m_DevicesList.end(), devicesList.begin(), devicesList.end());
+        }
+      }
+    }
+  
+  if (m_DevicesList.size() == 0)
+    {
+    errid = CL_DEVICE_NOT_AVAILABLE;
+    OpenCLCheckError(errid, __FILE__, __LINE__, ITK_LOCATION);
+    }
+  
   // create context
-  m_Context = clCreateContext(ITK_NULLPTR, m_NumberOfDevices, m_Devices, ITK_NULLPTR, ITK_NULLPTR, &errid);
-//   m_Context = clCreateContext(0, m_NumberOfDevices, m_Devices, clLogMessagesToStdoutAPPLE, ITK_NULLPTR, &errid);
-
+  m_Context = clCreateContext(ITK_NULLPTR, m_DevicesList.size(), &m_DevicesList[0], ITK_NULLPTR, ITK_NULLPTR, &errid);
   OpenCLCheckError( errid, __FILE__, __LINE__, ITK_LOCATION );
 
   // create command queues
-  m_CommandQueue = (cl_command_queue *)malloc(m_NumberOfDevices * sizeof(cl_command_queue) );
-  for(unsigned int i=0; i<m_NumberOfDevices; i++)
+  m_CommandQueue = (cl_command_queue *)malloc(m_DevicesList.size() * sizeof(cl_command_queue) );
+  for(unsigned int i=0; i<m_DevicesList.size(); i++)
     {
-    m_CommandQueue[i] = clCreateCommandQueue(m_Context, m_Devices[i], 0, &errid);
+      m_CommandQueue[i] = clCreateCommandQueue(m_Context, m_DevicesList[i], 0, &errid);
 
-// Debug
-    OpenCLPrintDeviceInfo(m_Devices[i], true);
+    // Debug
+      OpenCLPrintDeviceInfo(m_DevicesList[i], true);
     //
-    OpenCLCheckError( errid, __FILE__, __LINE__, ITK_LOCATION );
+      OpenCLCheckError( errid, __FILE__, __LINE__, ITK_LOCATION );
     }
-
-  //m_current_command_queue_id = 0; // default command queue id
 }
 
 GPUContextManager::~GPUContextManager()
 {
   cl_int errid;
-  for(unsigned int i=0; i<m_NumberOfDevices; i++)
+  for(unsigned int i=0; i<m_DevicesList.size(); i++)
     {
     errid = clReleaseCommandQueue(m_CommandQueue[i]);
     OpenCLCheckError( errid, __FILE__, __LINE__, ITK_LOCATION );
@@ -88,33 +96,33 @@ GPUContextManager::~GPUContextManager()
   free(m_CommandQueue);
   errid = clReleaseContext(m_Context);
   OpenCLCheckError( errid, __FILE__, __LINE__, ITK_LOCATION );
-  if(m_NumberOfDevices > 0)
+  
+  if (m_DevicesList.size())
     {
-    free(m_Devices);
+      m_DevicesList.clear();
     }
 }
 
 cl_command_queue GPUContextManager::GetCommandQueue(int i)
 {
-  if(i < 0 || i >= (int)m_NumberOfDevices)
+  if(i < 0 || i >= (int)m_DevicesList.size())
     {
     printf("Error: requested queue id is not available. Default queue will be used (queue id = 0)\n");
     return m_CommandQueue[0];
     }
-
-//std::cout << "Command queue " << i << " is requested " << std::endl;
 
   return m_CommandQueue[i];
 }
 
 cl_device_id GPUContextManager::GetDeviceId(int i)
 {
-  if(i < 0 || i >= (int)m_NumberOfDevices)
+  if(i < 0 || i >= (int)m_DevicesList.size())
     {
     printf("Error: requested queue id is not available. Default queue will be used (queue id = 0)\n");
-    return m_Devices[0];
+  return m_DevicesList[0];
     }
-  return m_Devices[i];
+
+  return m_DevicesList[i];
 }
 
 } // namespace itk

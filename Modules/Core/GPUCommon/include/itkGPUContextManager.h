@@ -18,6 +18,8 @@
 #ifndef itkGPUContextManager_h
 #define itkGPUContextManager_h
 
+#include <vector>
+
 #include "itkOpenCLUtil.h"
 #include <itkLightObject.h>
 
@@ -42,7 +44,7 @@ public:
   cl_command_queue GetCommandQueue(int i);
 
   unsigned int GetNumberOfCommandQueues() {
-    return m_NumberOfDevices;
+    return m_DevicesList.size();
   }
 
   cl_context GetCurrentContext() {
@@ -56,14 +58,11 @@ private:
   GPUContextManager();
   ~GPUContextManager();
 
-  cl_platform_id    m_Platform;
   cl_context        m_Context;
-  cl_device_id*     m_Devices;
   cl_command_queue* m_CommandQueue;    // one queue per device
 
-  cl_uint m_NumberOfDevices, m_NumberOfPlatforms;
-
   static GPUContextManager* m_Instance;
+  std::vector<cl_device_id> m_DevicesList;
 };
 } // namespace itk
 

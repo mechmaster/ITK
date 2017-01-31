@@ -24,6 +24,7 @@
 
 #include <iostream>
 #include <sstream>
+#include <vector>
 
 #include <itkVector.h>
 
@@ -53,6 +54,8 @@ int OpenCLGetLocalBlockSize(unsigned int ImageDim);
 /** Get the devices that are available */
 cl_device_id* OpenCLGetAvailableDevices(cl_platform_id platform, cl_device_type devType, cl_uint* numAvailableDevices);
 
+bool OpenCLGetAvailableDevices(cl_platform_id platform, cl_device_type devType, std::vector<cl_device_id>& devicesList);
+
 /** Get the device that has the maximum FLOPS in the current context */
 cl_device_id OpenCLGetMaxFlopsDev(cl_context cxGPUContext);
 
@@ -61,6 +64,8 @@ void OpenCLPrintDeviceInfo(cl_device_id device, bool verbose=false);
 
 /** Find the OpenCL platform that matches the "name" */
 cl_platform_id OpenCLSelectPlatform(const char* name);
+
+std::vector<cl_platform_id> OpenCLGetPlatformsList();
 
 /** Check OpenCL error */
 void OpenCLCheckError(cl_int error, const char* filename="", int lineno=0, const char* location="");
